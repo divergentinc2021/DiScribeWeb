@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate PWA Icons</title></head>
+<body>
+<p>Right-click each image below and "Save As" to public/ folder</p>
+
+<h3>icon-192.png</h3>
+<canvas id="c192" width="192" height="192"></canvas>
+
+<h3>icon-512.png</h3>
+<canvas id="c512" width="512" height="512"></canvas>
+
+<script>
+function drawIcon(canvas) {
+  const ctx = canvas.getContext('2d');
+  const s = canvas.width;
+  const r = s * 0.2;
+
+  // Background
+  ctx.fillStyle = '#6C5CE7';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, s, s, r);
+  ctx.fill();
+
+  // Scale factor
+  const f = s / 100;
+
+  // Mic body
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.ellipse(50*f, 43*f, 14*f, 23*f, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Mic arc
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 4 * f;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(50*f, 50*f, 22*f, Math.PI * 0.15, Math.PI * 0.85, true);
+  ctx.stroke();
+
+  // Stem
+  ctx.beginPath();
+  ctx.moveTo(50*f, 72*f);
+  ctx.lineTo(50*f, 80*f);
+  ctx.stroke();
+
+  // Base
+  ctx.beginPath();
+  ctx.moveTo(40*f, 80*f);
+  ctx.lineTo(60*f, 80*f);
+  ctx.stroke();
+}
+
+drawIcon(document.getElementById('c192'));
+drawIcon(document.getElementById('c512'));
+
+// Auto-download
+['c192', 'c512'].forEach(id => {
+  const canvas = document.getElementById(id);
+  const size = id.replace('c', '');
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `icon-${size}.png`;
+    // a.click(); // uncomment to auto-download
+  }, 'image/png');
+});
+</script>
+</body>
+</html>

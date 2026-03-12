@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0f0f14;
+  --color-surface: #1a1a24;
+  --color-surface2: #24243a;
+  --color-border: #2d2d44;
+  --color-text: #e4e4ef;
+  --color-muted: #7a7a99;
+  --color-accent: #6C5CE7;
+  --color-accent-hover: #7d6ff0;
+  --color-red: #ff4757;
+  --color-green: #2ed573;
+  --color-yellow: #ffa502;
+  --color-orange: #ff6348;
+
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+* {
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+
+/* Pulse animation for recording */
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.pulse-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--color-red);
+  animation: pulse-ring 1.2s ease-out infinite;
+}
+
+/* Safe area for mobile */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
