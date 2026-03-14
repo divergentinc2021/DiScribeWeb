@@ -44,25 +44,27 @@ export function RecordingView() {
     }
 
     try {
-      setProcessing({ status: 'Uploading audio…' })
       await updateRecording(currentRecording.id, { status: 'transcribing' })
 
       // Read blob as ArrayBuffer
       const buffer = await currentRecording.audioBlob.arrayBuffer()
+      const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(1)
+      setProcessing({ status: `Uploading ${sizeMB}MB audio…`, progress: 10 })
 
-      // Send to Worker for transcription
-      setProcessing({ status: 'Transcribing…', progress: 30 })
+      // Send to Worker for transcription (Worker handles chunking for large files)
       const transcribeRes = await fetch(`${settings.workerUrl}/api/transcribe`, {
         method: 'POST',
         body: buffer,
       })
 
       if (!transcribeRes.ok) {
-        throw new Error(`Transcription failed: ${transcribeRes.status}`)
+        const errBody = await transcribeRes.text()
+        throw new Error(`Transcription failed (${transcribeRes.status}): ${errBody}`)
       }
 
       const transcript = await transcribeRes.json()
-      setProcessing({ status: 'Transcription complete', progress: 60 })
+      const chunks = transcript.chunks || 1
+      setProcessing({ status: `Transcribed${chunks > 1 ? ` (${chunks} chunks)` : ''}`, progress: 60 })
 
       await updateRecording(currentRecording.id, {
         status: 'transcribed',
