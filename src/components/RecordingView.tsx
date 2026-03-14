@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../lib/store'
-import { getTemplate } from '../lib/templates'
+import { getTemplate, templates } from '../lib/templates'
 import { formatDate, formatDuration } from '../lib/db'
+import { chunkAudio } from '../lib/audioChunker'
 
 export function RecordingView() {
   const {
@@ -44,27 +45,80 @@ export function RecordingView() {
     }
 
     try {
-      await updateRecording(currentRecording.id, { status: 'transcribing' })
+      await updateRecording(currentRecording.id, { status: 'transcribing', error: undefined })
 
-      // Read blob as ArrayBuffer
-      const buffer = await currentRecording.audioBlob.arrayBuffer()
-      const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(1)
-      setProcessing({ status: `Uploading ${sizeMB}MB audio…`, progress: 10 })
-
-      // Send to Worker for transcription (Worker handles chunking for large files)
-      const transcribeRes = await fetch(`${settings.workerUrl}/api/transcribe`, {
-        method: 'POST',
-        body: buffer,
+      // Step 1: Decode audio and split into ~25-second WAV chunks
+      const chunks = await chunkAudio(currentRecording.audioBlob, (msg) => {
+        setProcessing({ status: msg, progress: 5 })
       })
 
-      if (!transcribeRes.ok) {
-        const errBody = await transcribeRes.text()
-        throw new Error(`Transcription failed (${transcribeRes.status}): ${errBody}`)
+      setProcessing({ status: `Transcribing ${chunks.length} chunks…`, progress: 10 })
+
+      // Step 2: Send each chunk to the Worker individually
+      const allSegments: { start: number; end: number; text: string }[] = []
+      const allTexts: string[] = []
+      let failedChunks = 0
+
+      for (const chunk of chunks) {
+        const pct = 10 + Math.round((chunk.index / chunks.length) * 50)
+        setProcessing({
+          status: `Transcribing chunk ${chunk.index + 1}/${chunk.total}…`,
+          progress: pct,
+        })
+
+        try {
+          // Build URL with language/translation params
+          const params = new URLSearchParams()
+          if (settings.language && settings.language !== 'auto') params.set('language', settings.language)
+          if (settings.translateToEnglish) params.set('task', 'translate')
+          const transcribeUrl = `${settings.workerUrl}/api/transcribe${params.toString() ? '?' + params : ''}`
+
+          const res = await fetch(transcribeUrl, {
+            method: 'POST',
+            body: chunk.blob,
+          })
+
+          if (!res.ok) {
+            const errText = await res.text()
+            console.warn(`Chunk ${chunk.index + 1} failed (${res.status}):`, errText)
+            failedChunks++
+            continue
+          }
+
+          const result = await res.json()
+
+          if (result.fullText) {
+            allTexts.push(result.fullText)
+          }
+
+          // Offset segment timestamps to match the chunk's position in the full recording
+          if (result.segments) {
+            const offsetSegments = result.segments.map((s: any) => ({
+              start: s.start + chunk.startTime,
+              end: s.end + chunk.startTime,
+              text: s.text,
+            }))
+            allSegments.push(...offsetSegments)
+          }
+        } catch (chunkErr: any) {
+          console.warn(`Chunk ${chunk.index + 1} error:`, chunkErr)
+          failedChunks++
+        }
       }
 
-      const transcript = await transcribeRes.json()
-      const chunks = transcript.chunks || 1
-      setProcessing({ status: `Transcribed${chunks > 1 ? ` (${chunks} chunks)` : ''}`, progress: 60 })
+      if (allTexts.length === 0) {
+        throw new Error(`All ${chunks.length} chunks failed to transcribe`)
+      }
+
+      const transcript = {
+        segments: allSegments,
+        fullText: allTexts.join(' '),
+      }
+
+      const status = failedChunks > 0
+        ? `Transcribed (${chunks.length - failedChunks}/${chunks.length} chunks)`
+        : `Transcribed (${chunks.length} chunks)`
+      setProcessing({ status, progress: 60 })
 
       await updateRecording(currentRecording.id, {
         status: 'transcribed',
@@ -84,23 +138,27 @@ export function RecordingView() {
     }
   }
 
-  const handleProcess = async (transcript?: any) => {
+  const handleProcess = async (transcript?: any, overrideTemplateId?: string) => {
     const t = transcript || currentRecording.transcript
     if (!t) return
-    if (!template) return
+
+    const useTemplate = overrideTemplateId
+      ? getTemplate(overrideTemplateId)
+      : template
+    if (!useTemplate) return
 
     try {
       setProcessing({ status: 'Processing with AI…', progress: 70 })
-      await updateRecording(currentRecording.id, { status: 'processing' })
+      await updateRecording(currentRecording.id, { status: 'processing', templateId: useTemplate.id })
 
       const text = t.segments
         ? t.segments.map((s: any) => `[${Math.floor(s.start / 60)}:${String(Math.floor(s.start % 60)).padStart(2, '0')}] ${s.text}`).join('\n')
         : t.fullText || ''
 
       let body: any
-      let endpoint = template.endpoint
+      let endpoint = useTemplate.endpoint
 
-      if (template.endpoint === '/api/generate-minutes') {
+      if (useTemplate.endpoint === '/api/generate-minutes') {
         body = JSON.stringify({
           transcript: text,
           meetingTitle: currentRecording.title,
@@ -108,9 +166,8 @@ export function RecordingView() {
           date: currentRecording.date
         })
       } else {
-        // For /api/summarize — use custom prompt if template has one
-        const promptText = template.prompt
-          ? template.prompt.replace('{transcript}', text)
+        const promptText = useTemplate.prompt
+          ? useTemplate.prompt.replace('{transcript}', text)
           : text
 
         body = JSON.stringify({
@@ -133,8 +190,8 @@ export function RecordingView() {
       await updateRecording(currentRecording.id, {
         status: 'done',
         result: {
-          templateId: template.id,
-          templateName: template.name,
+          templateId: useTemplate.id,
+          templateName: useTemplate.name,
           content: result,
           generatedAt: new Date().toISOString()
         }
@@ -264,6 +321,29 @@ export function RecordingView() {
         )}
       </div>
 
+      {/* Template Switcher — shown when transcript exists */}
+      {currentRecording.transcript && (
+        <div className="px-5 pb-3">
+          <p className="text-xs text-muted uppercase tracking-wider mb-2 font-medium">Process as</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {templates.map(t => (
+              <button
+                key={t.id}
+                onClick={() => updateRecording(currentRecording.id, { templateId: t.id })}
+                className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  currentRecording.templateId === t.id
+                    ? 'text-white shadow-md'
+                    : 'bg-surface text-muted hover:text-text'
+                }`}
+                style={currentRecording.templateId === t.id ? { background: t.color } : undefined}
+              >
+                {t.icon} {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="px-5 pb-8 space-y-3">
         {(currentRecording.status === 'recorded' || currentRecording.status === 'error') && (
@@ -285,12 +365,21 @@ export function RecordingView() {
           </button>
         )}
         {currentRecording.result && (
-          <button
-            onClick={() => openResult(currentRecording.id)}
-            className="w-full py-3.5 rounded-xl bg-green text-white font-medium text-sm"
-          >
-            View {currentRecording.result.templateName}
-          </button>
+          <>
+            <button
+              onClick={() => openResult(currentRecording.id)}
+              className="w-full py-3.5 rounded-xl bg-green text-white font-medium text-sm"
+            >
+              View {currentRecording.result.templateName}
+            </button>
+            <button
+              onClick={() => handleProcess(undefined, currentRecording.templateId)}
+              disabled={isProcessing}
+              className="w-full py-3 rounded-xl bg-surface border border-border text-sm font-medium text-muted hover:text-text transition-colors disabled:opacity-40"
+            >
+              Re-process with {template?.name || 'Template'}
+            </button>
+          </>
         )}
       </div>
     </div>

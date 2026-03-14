@@ -1,9 +1,46 @@
+import { useRef } from 'react'
 import { useStore } from '../lib/store'
 import { templates, getTemplate } from '../lib/templates'
-import { formatDate, formatDuration } from '../lib/db'
+import { formatDate, formatDuration, generateId, saveRecording } from '../lib/db'
 
 export function HomeView() {
-  const { recordings, setView, openRecording, openResult, selectedTemplateId, setSelectedTemplateId } = useStore()
+  const { recordings, setView, openRecording, openResult, selectedTemplateId, setSelectedTemplateId, loadRecordings } = useStore()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      // Get duration using AudioContext
+      const arrayBuffer = await file.arrayBuffer()
+      const audioCtx = new AudioContext()
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
+      const duration = audioBuffer.duration
+      await audioCtx.close()
+
+      // Create recording from uploaded file
+      const title = file.name.replace(/\.[^.]+$/, '') // strip extension
+      const id = generateId()
+      await saveRecording({
+        id,
+        title,
+        templateId: selectedTemplateId,
+        date: new Date().toISOString(),
+        duration,
+        audioBlob: file,
+        status: 'recorded',
+      })
+
+      await loadRecordings()
+      openRecording(id)
+    } catch (err: any) {
+      alert(`Could not load audio file: ${err.message}`)
+    }
+
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -46,14 +83,29 @@ export function HomeView() {
         </p>
       </section>
 
-      {/* Record Button */}
-      <section className="px-5 py-6 flex justify-center">
+      {/* Record / Upload Buttons */}
+      <section className="px-5 py-6 flex items-center justify-center gap-6">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-14 h-14 rounded-full bg-surface border border-border flex items-center justify-center text-muted hover:text-text transition-colors active:scale-95"
+          title="Upload audio file"
+        >
+          <UploadIcon />
+        </button>
         <button
           onClick={() => setView('recorder')}
           className="relative w-20 h-20 rounded-full bg-red flex items-center justify-center shadow-lg active:scale-95 transition-transform"
         >
           <MicIcon />
         </button>
+        <div className="w-14" /> {/* spacer for visual balance */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,.mp3,.mp4,.m4a,.wav,.ogg,.webm,.aac,.flac"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
       </section>
 
       {/* Recordings List */}
@@ -123,6 +175,16 @@ function StatusBadge({ status }: { status: string }) {
     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${styles[status] || ''}`}>
       {labels[status] || status}
     </span>
+  )
+}
+
+function UploadIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
   )
 }
 

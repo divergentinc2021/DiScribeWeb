@@ -30,6 +30,8 @@ export interface ProcessedResult {
 export interface AppSettings {
   workerUrl: string
   defaultTemplate: string
+  language: string           // 'auto' | 'en' | 'fr'
+  translateToEnglish: boolean
 }
 
 interface DiScribeDB extends DBSchema {
@@ -98,7 +100,9 @@ export async function deleteRecording(id: string): Promise<void> {
 
 const DEFAULT_SETTINGS: AppSettings = {
   workerUrl: '',
-  defaultTemplate: 'meeting-minutes'
+  defaultTemplate: 'meeting-minutes',
+  language: 'auto',
+  translateToEnglish: false
 }
 
 export async function getSettings(): Promise<AppSettings> {

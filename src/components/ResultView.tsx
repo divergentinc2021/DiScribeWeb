@@ -86,6 +86,14 @@ export function ResultView() {
               lines.push('')
             })
           }
+        } else if (field.type === 'quotes') {
+          if (Array.isArray(value)) {
+            value.forEach((q: any) => {
+              const text = typeof q === 'string' ? q : q.text
+              const speaker = typeof q === 'object' && q.speaker ? ` — ${q.speaker}` : ''
+              lines.push(`> "${text}"${speaker}`)
+            })
+          }
         }
 
         lines.push('')
@@ -208,6 +216,23 @@ export function ResultView() {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {field.type === 'quotes' && Array.isArray(value) && (
+                  <div className="space-y-3">
+                    {value.map((q: any, i: number) => {
+                      const text = typeof q === 'string' ? q : q.text
+                      const speaker = typeof q === 'object' ? q.speaker : null
+                      return (
+                        <div key={i} className="pl-4 border-l-2 border-accent/40">
+                          <p className="text-sm italic text-text/85 leading-relaxed">"{text}"</p>
+                          {speaker && speaker !== 'Unknown' && (
+                            <p className="text-xs text-muted mt-1">— {speaker}</p>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </section>

@@ -15,7 +15,7 @@ export interface Template {
 export interface ResultField {
   key: string
   label: string
-  type: 'text' | 'list' | 'table' | 'discussions'
+  type: 'text' | 'list' | 'table' | 'discussions' | 'quotes'
 }
 
 // ── Template Presets ──
@@ -36,6 +36,7 @@ export const templates: Template[] = [
       { key: 'discussions', label: 'Discussions', type: 'discussions' },
       { key: 'actionItems', label: 'Action Items', type: 'table' },
       { key: 'decisions', label: 'Decisions', type: 'list' },
+      { key: 'quotes', label: 'Notable Quotes', type: 'quotes' },
     ]
   },
   {
@@ -67,6 +68,7 @@ Rules:
       { key: 'overview', label: 'Polished Text', type: 'text' },
       { key: 'keyPoints', label: 'Key Points', type: 'list' },
       { key: 'actionItems', label: 'Follow-ups', type: 'list' },
+      { key: 'quotes', label: 'Notable Quotes', type: 'quotes' },
     ]
   },
   {
@@ -132,6 +134,7 @@ Rules:
       { key: 'keyPoints', label: 'Key Learnings', type: 'list' },
       { key: 'actionItems', label: 'Exercises & Follow-ups', type: 'list' },
       { key: 'decisions', label: 'Key Takeaways', type: 'list' },
+      { key: 'quotes', label: 'Notable Quotes', type: 'quotes' },
     ]
   },
   {

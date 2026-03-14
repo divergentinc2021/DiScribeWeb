@@ -95,7 +95,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // Settings
-  settings: { workerUrl: '', defaultTemplate: 'meeting-minutes' },
+  settings: { workerUrl: '', defaultTemplate: 'meeting-minutes', language: 'auto', translateToEnglish: false },
 
   loadSettings: async () => {
     const settings = await db.getSettings()
