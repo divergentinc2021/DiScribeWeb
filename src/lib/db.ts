@@ -99,7 +99,7 @@ export async function deleteRecording(id: string): Promise<void> {
 // ── Settings ──
 
 const DEFAULT_SETTINGS: AppSettings = {
-  workerUrl: '',
+  workerUrl: 'https://meeting-summarizer.laurent-7ad.workers.dev',
   defaultTemplate: 'meeting-minutes',
   language: 'auto',
   translateToEnglish: false
